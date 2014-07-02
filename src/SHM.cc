@@ -53,15 +53,24 @@ Handle<Value> ShmRead(const Arguments& args) {
   if (sdata > 0) {
 //	  Local<Value> b =  Encode(sdata, length, BINARY);
 //	  return scope.Close(b);
-
+	
 	Buffer *slowBuffer = Buffer::New(length);
-	memcpy(Buffer::Data(slowBuffer), sdata, length);
+    memcpy(Buffer::Data(slowBuffer), sdata, length);
+   
+    v8::Local<Object> global = v8::Context::GetCurrent()->Global();
+    v8::Local<Value> bv = global->Get(String::NewSymbol("Buffer"));
 
-	Local<Object> globalObj = Context::GetCurrent()->Global();
-	Local<Function> bufferConstructor = Local<Function>::Cast(globalObj->Get(String::New("Buffer")));
-	Handle<Value> constructorArgs[3] = { slowBuffer->handle_, v8::Integer::New(length), v8::Integer::New(0) };
-	Local<Object> actualBuffer = bufferConstructor->NewInstance(3, constructorArgs);
-	return scope.Close(actualBuffer);
+    assert(bv->IsFunction());
+
+    Local<Function> bc = v8::Local<Function>::Cast(bv);
+    Handle<Value> cArgs[3] = {
+        slowBuffer->handle_,
+        v8::Integer::New(length),
+        v8::Integer::New(0)
+    };
+    v8::Local<Object> fastBuffer = bc->NewInstance(3, cArgs);
+
+    return scope.Close(fastBuffer);
 
   } else {
 	Local<Value> e = Exception::Error(String::NewSymbol("SHM read error"));
