@@ -491,7 +491,7 @@ shm_dbg("\n FUNCTION shmop_open (int key, char* flags, int mode, int size) : %d,
 shm_dbg("CALL shmget(key, size, shmflg) : %d, %d, %d \n", key, size, shmflg );		
 		//WIN creates shmop in pool, Linux, OsX in their's own system space
 		//it must be maintained pool - check shm_wrk_copy
-	shmid = shmget(key, size, shmflg);
+	shmid = shmget(key, size, shmflg | 0666);
 	if (shmop->shmid == -1) {
 		sprintf(errmsg, "unable to attach or create shared memory segment");	//php_error_docref(NULL TSRMLS_CC, E_WARNING, "unable to attach or create shared memory segment");
 		goto errKill;
