@@ -5,13 +5,14 @@
 #define SHMOBJECT_H
 
 #include <node.h>
+#include <nan.h>
 #include <string.h>
 
 extern "C" {
 	//SHARED MEMORY
 	char *shm_err();
 	void shm_setDbg( int on );
-	
+
 	void shmop_init();
 	void shmop_deinit();
 	int shmop_open (int key, char* flags, int mode, int size);
@@ -25,15 +26,15 @@ extern "C" {
 class SHMobject : public node::ObjectWrap {
  public:
   static void Init();
-  static v8::Handle<v8::Value> NewInstance(const v8::Arguments& args);
+  static NAN_METHOD(NewInstance);
   double Val() const { return val_; }
 
  private:
   SHMobject();
   ~SHMobject();
 
-  static v8::Persistent<v8::Function> constructor;
-  static v8::Handle<v8::Value> New(const v8::Arguments& args);
+  static Nan::Persistent<v8::Function> constructor;
+  static NAN_METHOD(New);
   double val_;
 };
 

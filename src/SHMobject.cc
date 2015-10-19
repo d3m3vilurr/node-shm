@@ -2,6 +2,7 @@
 	#define BUILDING_NODE_EXTENSION
 #endif
 #include <node.h>
+#include <nan.h>
 #include "SHMobject.h"
 
 using namespace v8;
@@ -9,33 +10,32 @@ using namespace v8;
 SHMobject::SHMobject() {};
 SHMobject::~SHMobject() {};
 
-Persistent<Function> SHMobject::constructor;
+Nan::Persistent<Function> SHMobject::constructor;
 
 void SHMobject::Init() {
   // Prepare constructor template
-  Local<FunctionTemplate> tpl = FunctionTemplate::New(New);
-  tpl->SetClassName(String::NewSymbol("SHMobject"));
+  Local<FunctionTemplate> tpl = Nan::New<FunctionTemplate>(New);
+  tpl->SetClassName(Nan::New("SHMobject").ToLocalChecked());
   tpl->InstanceTemplate()->SetInternalFieldCount(1);
 
-  constructor = Persistent<Function>::New(tpl->GetFunction());
+  constructor.Reset(tpl->GetFunction());
 }
 
-Handle<Value> SHMobject::New(const Arguments& args) {
-  HandleScope scope;
+NAN_METHOD(SHMobject::New) {
+  Nan::HandleScope scope;
 
   SHMobject* obj = new SHMobject();
-  obj->val_ = args[0]->IsUndefined() ? 0 : args[0]->NumberValue();
-  obj->Wrap(args.This());
+  obj->val_ = info[0]->IsUndefined() ? 0 : info[0]->NumberValue();
+  obj->Wrap(info.This());
 
-  return args.This();
+  info.GetReturnValue().Set(info.This());
+  return;
 }
 
-Handle<Value> SHMobject::NewInstance(const Arguments& args) {
-  HandleScope scope;
+NAN_METHOD(SHMobject::NewInstance) {
+  Nan::HandleScope scope;
 
-  const unsigned argc = 1;
-  Handle<Value> argv[argc] = { args[0] };
-  Local<Object> instance = constructor->NewInstance(argc, argv);
-
-  return scope.Close(instance);
+  Local<Object> instance = Nan::New(constructor)->NewInstance();
+  info.GetReturnValue().Set(instance);
+  return;
 }

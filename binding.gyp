@@ -4,6 +4,7 @@
 {
   "targets": [
     {
+      "include_dirs": [ "<!(node -e \"require('nan')\")" ],
       "target_name": "shm",
       "sources": [ "src/SHM.cc", "src/SHMobject.cc", "src/shmop.c" ]
     }

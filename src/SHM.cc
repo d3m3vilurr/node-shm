@@ -2,23 +2,27 @@
 	#define BUILDING_NODE_EXTENSION
 #endif
 #include <node.h>
+#include <nan.h>
+#include <v8.h>
 #include "node_buffer.h"
 #include "SHMobject.h"
 
-using namespace node;
 using namespace v8;
 
+#define NanReturn(value) { info.GetReturnValue().Set(value); return; }
+#define NanException(type, msg) Exception::type(Nan::New(msg).ToLocalChecked())
+#define NanThrowException(exc) { Nan::ThrowError(exc); NanReturn(Nan::Undefined()); }
 
-Handle<Value> GetErrMsg(const Arguments& args) {
-	HandleScope scope;
-	int activateDebug = args[0]->Int32Value();	//IntegerValue();
+NAN_METHOD(GetErrMsg) {
+  Nan::HandleScope scope;
+	int activateDebug = info[0]->Int32Value();	//IntegerValue();
 	shm_setDbg(activateDebug);
-	Local<Value> b =  Encode(shm_err(), 1024, BINARY);
-	return scope.Close(b);
+	Local<Value> b =  Encode(shm_err(), 1024, node::BINARY);
+  NanReturn(b);
 }
 
-//API:	
-//	int shmid  .... int shmop_open (int key, char* flags, int mode, int size)	
+//API:
+//	int shmid  .... int shmop_open (int key, char* flags, int mode, int size)
 //	unsigned char*  shmop_read (int shmid, int start, int length)
 //	int  shmop_close (int shmid)
 //	int  shmop_size (int shmid)
@@ -26,125 +30,101 @@ Handle<Value> GetErrMsg(const Arguments& args) {
 //	int shmop_delete (int shmid)
 //
 
-Handle<Value> ShmOpen(const Arguments& args) {
-//	int shmid  .... int shmop_open (int key, char* flags, int mode, int size)	
-  HandleScope scope;
+NAN_METHOD(ShmOpen) {
+//	int shmid  .... int shmop_open (int key, char* flags, int mode, int size)
+  Nan::HandleScope scope;
   char *flags = NULL;
-  int key = args[0]->Int32Value();	//IntegerValue();
-  String::Utf8Value sflags(args[1]->ToString());;
+  int key = info[0]->Int32Value();	//IntegerValue();
+  String::Utf8Value sflags(info[1]->ToString());;
   flags = new char[(sflags.length()+1)];
   memcpy(flags,*sflags,sflags.length()+1);
-  int mode = args[2]->Int32Value();	//IntegerValue();
-  int size = args[3]->Int32Value();	//IntegerValue();
+  int mode = info[2]->Int32Value();	//IntegerValue();
+  int size = info[3]->Int32Value();	//IntegerValue();
 
   int retval = shmop_open (key, flags, mode, size);
-  return scope.Close(Number::New(retval));
+  NanReturn(Nan::New<Number>(retval));
 }
 
-Handle<Value> ShmRead(const Arguments& args) {
+NAN_METHOD(ShmRead) {
 //	unsigned char*  shmop_read (int shmid, int start, int length)
-  HandleScope scope;
+  Nan::HandleScope scope;
   char *sdata;
-  int shmid = args[0]->Int32Value();	//IntegerValue();
-  int start = args[1]->Int32Value();	//IntegerValue();
-  int length = args[2]->Int32Value();	//IntegerValue();
-  
+  int shmid = info[0]->Int32Value();	//IntegerValue();
+  int start = info[1]->Int32Value();	//IntegerValue();
+  int length = info[2]->Int32Value();	//IntegerValue();
+
   sdata = (char *)shmop_read (shmid, start, length);
-  if (sdata > 0) {
-//	  Local<Value> b =  Encode(sdata, length, BINARY);
-//	  return scope.Close(b);
-	
-	Buffer *slowBuffer = Buffer::New(length);
-    memcpy(Buffer::Data(slowBuffer), sdata, length);
-   
-    v8::Local<Object> global = v8::Context::GetCurrent()->Global();
-    v8::Local<Value> bv = global->Get(String::NewSymbol("Buffer"));
-
-    assert(bv->IsFunction());
-
-    Local<Function> bc = v8::Local<Function>::Cast(bv);
-    Handle<Value> cArgs[3] = {
-        slowBuffer->handle_,
-        v8::Integer::New(length),
-        v8::Integer::New(0)
-    };
-    v8::Local<Object> fastBuffer = bc->NewInstance(3, cArgs);
-
-    return scope.Close(fastBuffer);
-
-  } else {
-	Local<Value> e = Exception::Error(String::NewSymbol("SHM read error"));
-	return scope.Close(e);
+  if (sdata <= 0) {
+    Local<Value> e = NanException(Error, "SHM read error");
+    NanReturn(e);
   }
+  Local<Object> buf = Nan::NewBuffer(length).ToLocalChecked();
+  memcpy(node::Buffer::Data(buf), sdata, length);
+  NanReturn(buf);
 }
 
-Handle<Value> ShmClose(const Arguments& args) {
+NAN_METHOD(ShmClose) {
 //	int  shmop_close (int shmid)
-  HandleScope scope;
-  int shmid = args[0]->Int32Value();	//IntegerValue();
-  
+  Nan::HandleScope scope;
+  int shmid = info[0]->Int32Value();	//IntegerValue();
+
   shmop_close (shmid);
-  return scope.Close(Number::New(1));
+  NanReturn(Nan::New<Number>(1));
 }
 
-Handle<Value> ShmSize(const Arguments& args) {
+NAN_METHOD(ShmSize) {
 //	int  shmop_size (int shmid)
-  HandleScope scope;
-  int shmid = args[0]->Int32Value();	//IntegerValue();
-  
+  Nan::HandleScope scope;
+  int shmid = info[0]->Int32Value();	//IntegerValue();
+
   int retval = shmop_size (shmid);
-  return scope.Close(Number::New(retval));
+  NanReturn(Nan::New<Number>(retval));
 }
 
-Handle<Value> ShmWrite(const Arguments& args) {
+NAN_METHOD(ShmWrite) {
 //	int  shmop_write (int shmid, char * data, int offset, int data_len)
-  HandleScope scope;
-  int shmid = args[0]->Int32Value();	//IntegerValue();
-  //Local<String> sdata = args[1]->ToString();
-    Local<Value> buffer_v = args[1];
-    if (!Buffer::HasInstance(buffer_v)) {
-      return ThrowException(Exception::TypeError(
-            String::New("Argument should be a buffer")));
-    }
-    Local<Object> buffer_obj = buffer_v->ToObject();
-    char *buffer_data = Buffer::Data(buffer_obj);
-//    size_t buffer_len = Buffer::Length(buffer_obj);
-  int offset = args[2]->Int32Value();	//IntegerValue();
-  int data_len = args[3]->Int32Value();	//IntegerValue();
-  
+  Nan::HandleScope scope;
+  int shmid = info[0]->Int32Value();	//IntegerValue();
+  //Local<String> sdata = info[1]->ToString();
+  Local<Value> buffer_v = info[1];
+  if (!node::Buffer::HasInstance(buffer_v)) {
+    NanThrowException(NanException(TypeError, "Argument should be a buffer"));
+  }
+  Local<Object> buffer_obj = buffer_v->ToObject();
+  char *buffer_data = node::Buffer::Data(buffer_obj);
+  int offset = info[2]->Int32Value();	//IntegerValue();
+  int data_len = info[3]->Int32Value();	//IntegerValue();
+
   int retval = shmop_write (shmid, (unsigned char *)buffer_data, offset, data_len);
-  return scope.Close(Number::New(retval));
+  NanReturn(Nan::New<Number>(retval));
 }
 
-Handle<Value> ShmDelete(const Arguments& args) {
+NAN_METHOD(ShmDelete) {
 //	int shmop_delete (int shmid)
-  HandleScope scope;
-  int shmid = args[0]->Int32Value();	//IntegerValue();
-  
+  Nan::HandleScope scope;
+  int shmid = info[0]->Int32Value();	//IntegerValue();
+
   int retval = shmop_delete (shmid);
-  return scope.Close(Number::New(retval));
+  NanReturn(Nan::New<Number>(retval));
 }
 
-
-void Initialize(Handle<Object> target) {
+void Initialize(Local<Object> target) {
   SHMobject::Init();
 
-	  
-  target->Set(String::NewSymbol("getErrMsg"),
-      FunctionTemplate::New(GetErrMsg)->GetFunction());
-	  
-  target->Set(String::NewSymbol("openSHM"),
-      FunctionTemplate::New(ShmOpen)->GetFunction());
-  target->Set(String::NewSymbol("readSHM"),
-      FunctionTemplate::New(ShmRead)->GetFunction());
-  target->Set(String::NewSymbol("closeSHM"),
-      FunctionTemplate::New(ShmClose)->GetFunction());
-  target->Set(String::NewSymbol("sizeSHM"),
-      FunctionTemplate::New(ShmSize)->GetFunction());
-  target->Set(String::NewSymbol("writeSHM"),
-      FunctionTemplate::New(ShmWrite)->GetFunction());
-  target->Set(String::NewSymbol("deleteSHM"),
-      FunctionTemplate::New(ShmDelete)->GetFunction());
+  target->Set(Nan::New("getErrMsg").ToLocalChecked(),
+              Nan::New<FunctionTemplate>(GetErrMsg)->GetFunction());
+  target->Set(Nan::New("openSHM").ToLocalChecked(),
+              Nan::New<FunctionTemplate>(ShmOpen)->GetFunction());
+  target->Set(Nan::New("readSHM").ToLocalChecked(),
+              Nan::New<FunctionTemplate>(ShmRead)->GetFunction());
+  target->Set(Nan::New("closeSHM").ToLocalChecked(),
+              Nan::New<FunctionTemplate>(ShmClose)->GetFunction());
+  target->Set(Nan::New("sizeSHM").ToLocalChecked(),
+              Nan::New<FunctionTemplate>(ShmSize)->GetFunction());
+  target->Set(Nan::New("writeSHM").ToLocalChecked(),
+              Nan::New<FunctionTemplate>(ShmWrite)->GetFunction());
+  target->Set(Nan::New("deleteSHM").ToLocalChecked(),
+              Nan::New<FunctionTemplate>(ShmDelete)->GetFunction());
 }
 
 NODE_MODULE(shm, Initialize)	//name of module in NODE !!! =  "shm"
